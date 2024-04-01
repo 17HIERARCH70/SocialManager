@@ -2,15 +2,21 @@ package config
 
 import (
 	"flag"
+	"github.com/ilyakaznacheev/cleanenv"
 	"os"
 )
 
 type Config struct {
 	Env      string         `yaml:"env" env-default:"local"`
+	LogLevel string         `yaml:"log_level" env-default:"INFO"`
+	Server   ServerConfig   `yaml:"server"`
 	Postgres PostgresConfig `yaml:"postgres"`
-	Redis    RedisConfig    `yaml:"redis"`
+	Gmail    GmailConfig    `yaml:"gmail"`
 }
-
+type ServerConfig struct {
+	Host string `env-default:"localhost"`
+	Port int    `env-default:"8080"`
+}
 type PostgresConfig struct {
 	Host     string `env-default:"localhost"`
 	Port     int    `env-default:"5432"`
@@ -20,22 +26,30 @@ type PostgresConfig struct {
 	SSLMode  string `env-default:"disable"`
 }
 
-type RedisConfig struct {
-	Host     string `env-default:"localhost"`
-	Port     int    `env-default:"6379"`
-	Username string `env-default:"default"`
-	Password string `env-default:""`
-	Database int    `env-default:"0"`
+type GmailConfig struct {
+	SecretPath string `env-default:"secret.json"`
 }
 
 func MustLoad() *Config {
-	configpath, err := fetchConfigPath()
-	if err != nil {
-
+	configPath := fetchConfigPath()
+	if configPath == "" {
+		panic("config is empty")
 	}
+
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		panic("config file does not exist: " + configPath)
+	}
+
+	var cfg Config
+
+	if err := cleanenv.ReadConfig(configPath, &cfg); err != nil {
+		panic("config path if empty " + err.Error())
+	}
+
+	return &cfg
 }
 
-func fetchConfigPath() (string, error) {
+func fetchConfigPath() string {
 	var res string
 
 	flag.StringVar(&res, "config", "", "path to config file")
@@ -45,5 +59,5 @@ func fetchConfigPath() (string, error) {
 		res = os.Getenv("CONFIG_PATH")
 	}
 
-	return res, nil
+	return res
 }

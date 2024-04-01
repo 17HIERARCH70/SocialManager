@@ -1,0 +1,17 @@
+env: local
+log_level: debug
+
+server:
+  host: "localhost"
+  port: 8080
+
+postgres:
+  host: "localhost"
+  port: 5432
+  user: "socialmanage"
+  password: "secretpass"
+  database: "socialmanagerdb"
+  sslmode: disable
+
+gmail:
+  secretpath: "/Users/nikitabelekov/go/src/SocialManager/secret.json"
