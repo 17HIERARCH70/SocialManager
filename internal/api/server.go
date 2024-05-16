@@ -3,15 +3,18 @@ package api
 import (
 	"context"
 	"fmt"
+	_ "github.com/17HIERARCH70/SocialManager/docs"
 	"github.com/17HIERARCH70/SocialManager/internal/config"
 	"github.com/17HIERARCH70/SocialManager/internal/services/authService"
 	emailService2 "github.com/17HIERARCH70/SocialManager/internal/services/emailService"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v4/pgxpool"
+	_ "github.com/swaggo/swag"
 	"golang.org/x/exp/slog"
 	"net/http"
 )
 
+// App represents the application with all its dependencies
 type App struct {
 	psql       *pgxpool.Pool
 	cfg        *config.Config
@@ -21,6 +24,7 @@ type App struct {
 	emailSvc   *emailService2.EmailService
 }
 
+// NewApp initializes the application with the given dependencies
 func NewApp(psql *pgxpool.Pool, cfg *config.Config, log *slog.Logger) *App {
 	// Create a new router
 	router := mux.NewRouter()
@@ -43,6 +47,7 @@ func NewApp(psql *pgxpool.Pool, cfg *config.Config, log *slog.Logger) *App {
 	return app
 }
 
+// Run starts the HTTP server and the email polling service
 func (a *App) Run() {
 	go a.emailSvc.StartEmailPolling()
 
@@ -56,6 +61,7 @@ func (a *App) Run() {
 	}
 }
 
+// Shutdown gracefully shuts down the HTTP server and closes the database connection
 func (a *App) Shutdown(ctx context.Context) interface{} {
 	if a.httpServer != nil {
 		if err := a.httpServer.Shutdown(ctx); err != nil {

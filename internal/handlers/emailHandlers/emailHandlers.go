@@ -10,11 +10,13 @@ import (
 	"github.com/17HIERARCH70/SocialManager/internal/services/emailService"
 )
 
+// EmailHandler handles email-related requests
 type EmailHandler struct {
 	emailService *emailService.EmailService
 	log          *slog.Logger
 }
 
+// NewEmailHandler creates a new EmailHandler
 func NewEmailHandler(emailService *emailService.EmailService, log *slog.Logger) *EmailHandler {
 	return &EmailHandler{
 		emailService: emailService,
@@ -22,6 +24,13 @@ func NewEmailHandler(emailService *emailService.EmailService, log *slog.Logger) 
 	}
 }
 
+// UpdateEmailsHandler updates all emails
+// @Summary Update Emails
+// @Description Update all emails
+// @Tags emails
+// @Produce plain
+// @Success 200 {string} string "Emails updated successfully"
+// @Router /emails/update [put]
 func (h *EmailHandler) UpdateEmailsHandler(w http.ResponseWriter, r *http.Request) {
 	err := h.emailService.UpdateAllEmails()
 	if err != nil {
@@ -30,9 +39,20 @@ func (h *EmailHandler) UpdateEmailsHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Emails updated successfully"))
+	_, err = w.Write([]byte("Emails updated successfully"))
+	if err != nil {
+		return
+	}
 }
 
+// GetEmailsByUserIDHandler retrieves emails by user ID
+// @Summary Get Emails by User ID
+// @Description Retrieve emails by user ID
+// @Tags emails
+// @Produce json
+// @Param user_id path int true "User ID"
+// @Success 200 {array} models.Email
+// @Router /emails/user/{user_id} [get]
 func (h *EmailHandler) GetEmailsByUserIDHandler(w http.ResponseWriter, r *http.Request) {
 	userID, err := strconv.Atoi(mux.Vars(r)["user_id"])
 	if err != nil {
@@ -57,6 +77,13 @@ func (h *EmailHandler) GetEmailsByUserIDHandler(w http.ResponseWriter, r *http.R
 	}
 }
 
+// GetAllEmailsHandler retrieves all emails
+// @Summary Get All Emails
+// @Description Retrieve all emails
+// @Tags emails
+// @Produce json
+// @Success 200 {array} models.Email
+// @Router /emails [get]
 func (h *EmailHandler) GetAllEmailsHandler(w http.ResponseWriter, r *http.Request) {
 	emails, err := h.emailService.GetAllEmails()
 	if err != nil {
@@ -74,6 +101,14 @@ func (h *EmailHandler) GetAllEmailsHandler(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// GetUserIDByEmailHandler retrieves user ID by email
+// @Summary Get User ID by Email
+// @Description Retrieve user ID by email
+// @Tags emails
+// @Produce json
+// @Param email query string true "Email"
+// @Success 200 {object} map[string]int "user_id"
+// @Router /emails/user [get]
 func (h *EmailHandler) GetUserIDByEmailHandler(w http.ResponseWriter, r *http.Request) {
 	email := r.URL.Query().Get("email")
 	if email == "" {
@@ -97,6 +132,14 @@ func (h *EmailHandler) GetUserIDByEmailHandler(w http.ResponseWriter, r *http.Re
 	}
 }
 
+// DeleteEmailByIDHandler deletes an email by ID
+// @Summary Delete Email by ID
+// @Description Delete an email by its ID
+// @Tags emails
+// @Produce plain
+// @Param email_id path string true "Email ID"
+// @Success 200 {string} string "Email deleted successfully"
+// @Router /emails/{email_id} [delete]
 func (h *EmailHandler) DeleteEmailByIDHandler(w http.ResponseWriter, r *http.Request) {
 	emailID := mux.Vars(r)["email_id"]
 	if emailID == "" {
@@ -112,9 +155,20 @@ func (h *EmailHandler) DeleteEmailByIDHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Email deleted successfully"))
+	_, err = w.Write([]byte("Email deleted successfully"))
+	if err != nil {
+		return
+	}
 }
 
+// DeleteAllEmailsByUserIDHandler deletes all emails by user ID
+// @Summary Delete All Emails by User ID
+// @Description Delete all emails by user ID
+// @Tags emails
+// @Produce plain
+// @Param user_id path int true "User ID"
+// @Success 200 {string} string "All emails deleted successfully"
+// @Router /emails/user/{user_id} [delete]
 func (h *EmailHandler) DeleteAllEmailsByUserIDHandler(w http.ResponseWriter, r *http.Request) {
 	userID, err := strconv.Atoi(mux.Vars(r)["user_id"])
 	if err != nil {
@@ -131,5 +185,10 @@ func (h *EmailHandler) DeleteAllEmailsByUserIDHandler(w http.ResponseWriter, r *
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("All emails deleted successfully"))
+	_, err = w.Write([]byte("All emails deleted successfully"))
+	if err != nil {
+		h.log.Error("Failed to write response", "error", err)
+		http.Error(w, "Failed to write response", http.StatusInternalServerError)
+		return
+	}
 }

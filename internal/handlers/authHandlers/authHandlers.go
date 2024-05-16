@@ -10,19 +10,35 @@ import (
 	"golang.org/x/oauth2"
 )
 
+// AuthHandler handles authentication-related requests
 type AuthHandler struct {
 	authService *authService.AuthService
 }
 
+// NewAuthHandler creates a new AuthHandler
 func NewAuthHandler(authService *authService.AuthService) *AuthHandler {
 	return &AuthHandler{authService: authService}
 }
 
+// GoogleLoginHandler initiates Google OAuth login
+// @Summary Google Login
+// @Description Initiate Google OAuth login
+// @Tags auth
+// @Produce json
+// @Success 200 {string} string "URL for Google login"
+// @Router /auth/google_login [get]
 func (h *AuthHandler) GoogleLoginHandler(w http.ResponseWriter, r *http.Request) {
 	url := h.authService.OAuthConfig().AuthCodeURL("state-token", oauth2.AccessTypeOffline, oauth2.ApprovalForce)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
+// GoogleCallbackHandler handles Google OAuth callback
+// @Summary Google OAuth Callback
+// @Description Handle Google OAuth callback
+// @Tags auth
+// @Produce json
+// @Success 200 {object} map[string]string "JWT Tokens"
+// @Router /auth/google_callback [get]
 func (h *AuthHandler) GoogleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	state := r.URL.Query().Get("state")
 	if state != "state-token" {

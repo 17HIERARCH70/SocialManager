@@ -17,12 +17,14 @@ import (
 	"google.golang.org/api/gmail/v1"
 )
 
+// AuthService handles authentication and token management
 type AuthService struct {
 	psql        *pgxpool.Pool
 	oauthConfig *oauth2.Config
 	Log         *slog.Logger
 }
 
+// NewAuthService creates a new AuthService
 func NewAuthService(psql *pgxpool.Pool, cfg *config.Config, log *slog.Logger) (*AuthService, error) {
 	oauthConfig, err := loadOAuthConfig(cfg.OAuth2.CredentialPath)
 	if err != nil {
@@ -36,6 +38,7 @@ func NewAuthService(psql *pgxpool.Pool, cfg *config.Config, log *slog.Logger) (*
 	}, nil
 }
 
+// loadOAuthConfig loads the OAuth configuration from a file
 func loadOAuthConfig(credentialsFile string) (*oauth2.Config, error) {
 	b, err := os.ReadFile(credentialsFile)
 	if err != nil {
@@ -45,17 +48,17 @@ func loadOAuthConfig(credentialsFile string) (*oauth2.Config, error) {
 	return google.ConfigFromJSON(b, gmail.GmailReadonlyScope, gmail.GmailModifyScope, "https://www.googleapis.com/auth/userinfo.profile", "https://www.googleapis.com/auth/userinfo.email")
 }
 
+// OAuthConfig returns the OAuth configuration
 func (s *AuthService) OAuthConfig() *oauth2.Config {
 	return s.oauthConfig
 }
 
+// ExchangeToken exchanges the authorization code for an access token
 func (s *AuthService) ExchangeToken(code string) (*oauth2.Token, error) {
 	token, err := s.oauthConfig.Exchange(context.Background(), code)
 	if err != nil {
 		return nil, err
 	}
-
-	s.Log.Info("Obtained token", slog.Any("token", token))
 
 	if !s.hasRequiredScopes(token) {
 		return nil, fmt.Errorf("insufficient token scopes")
@@ -73,15 +76,10 @@ func (s *AuthService) ExchangeToken(code string) (*oauth2.Token, error) {
 		}
 	}
 
-	if token.RefreshToken == "" {
-		s.Log.Warn("Refresh token is empty", slog.Any("token", token))
-	} else {
-		s.Log.Info("Refresh token obtained", slog.String("refresh_token", token.RefreshToken))
-	}
-
 	return token, nil
 }
 
+// hasRequiredScopes checks if the token has the required scopes
 func (s *AuthService) hasRequiredScopes(token *oauth2.Token) bool {
 	client := s.oauthConfig.Client(context.Background(), token)
 	resp, err := client.Get("https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=" + token.AccessToken)
@@ -109,6 +107,7 @@ func (s *AuthService) hasRequiredScopes(token *oauth2.Token) bool {
 	return true
 }
 
+// FetchUserInfo fetches the user info from the token
 func (s *AuthService) FetchUserInfo(token *oauth2.Token) (map[string]interface{}, error) {
 	client := s.oauthConfig.Client(context.Background(), token)
 	resp, err := client.Get("https://www.googleapis.com/oauth2/v3/userinfo")
@@ -125,6 +124,7 @@ func (s *AuthService) FetchUserInfo(token *oauth2.Token) (map[string]interface{}
 	return userInfo, nil
 }
 
+// SaveUserToDB saves the user info to the database
 func (s *AuthService) SaveUserToDB(userInfo map[string]interface{}) (int, error) {
 	tx, err := s.psql.Begin(context.Background())
 	if err != nil {
@@ -156,6 +156,7 @@ func (s *AuthService) SaveUserToDB(userInfo map[string]interface{}) (int, error)
 	return userID, nil
 }
 
+// SaveGoogleTokensToDB saves the Google tokens to the database
 func (s *AuthService) SaveGoogleTokensToDB(userID int, token *oauth2.Token) error {
 	ctx := context.Background()
 	query := `
@@ -170,6 +171,7 @@ func (s *AuthService) SaveGoogleTokensToDB(userID int, token *oauth2.Token) erro
 	return err
 }
 
+// SaveTokensToDB saves the JWT tokens to the database
 func (s *AuthService) SaveTokensToDB(userID int, accessToken, refreshToken string, expiresAt time.Time) error {
 	ctx := context.Background()
 	query := `INSERT INTO tokens (user_id, access_token, refresh_token, expires_at) 
@@ -180,6 +182,7 @@ func (s *AuthService) SaveTokensToDB(userID int, accessToken, refreshToken strin
 	return err
 }
 
+// FetchGoogleTokenByUserID retrieves the Google token from the database by user ID
 func (s *AuthService) FetchGoogleTokenByUserID(userID int) (*oauth2.Token, error) {
 	row := s.psql.QueryRow(context.Background(), "SELECT access_token, refresh_token, expires_at FROM google_tokens WHERE user_id=$1", userID)
 
@@ -198,13 +201,12 @@ func (s *AuthService) FetchGoogleTokenByUserID(userID int) (*oauth2.Token, error
 	}, nil
 }
 
+// RefreshToken refreshes the access token using the refresh token
 func (s *AuthService) RefreshToken(userID int, token *oauth2.Token) (*oauth2.Token, error) {
 	if token.RefreshToken == "" {
 		s.Log.Warn("No refresh token available")
 		return nil, errors.New("no refresh token available")
 	}
-
-	s.Log.Info("Refreshing token", slog.Int("user_id", userID), slog.String("refresh_token", token.RefreshToken))
 
 	newToken, err := s.oauthConfig.TokenSource(context.Background(), token).Token()
 	if err != nil {
@@ -223,6 +225,7 @@ func (s *AuthService) RefreshToken(userID int, token *oauth2.Token) (*oauth2.Tok
 	return newToken, nil
 }
 
+// GetUserIDByToken retrieves the user ID associated with the token
 func (s *AuthService) GetUserIDByToken(token *oauth2.Token) (int, error) {
 	userInfo, err := s.FetchUserInfo(token)
 	if err != nil {

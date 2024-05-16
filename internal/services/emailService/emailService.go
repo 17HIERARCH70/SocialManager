@@ -16,6 +16,7 @@ import (
 	"google.golang.org/api/option"
 )
 
+// EmailService handles email-related operations
 type EmailService struct {
 	psql        *pgxpool.Pool
 	authService *authService.AuthService
@@ -23,6 +24,7 @@ type EmailService struct {
 	interval    time.Duration
 }
 
+// NewEmailService creates a new EmailService
 func NewEmailService(psql *pgxpool.Pool, cfg *config.Config, authService *authService.AuthService, log *slog.Logger) (*EmailService, error) {
 	interval, err := time.ParseDuration(cfg.Gmail.RefreshTime)
 	if err != nil {
@@ -38,6 +40,7 @@ func NewEmailService(psql *pgxpool.Pool, cfg *config.Config, authService *authSe
 	}, nil
 }
 
+// StartEmailPolling starts the email polling process
 func (s *EmailService) StartEmailPolling() {
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
@@ -54,6 +57,7 @@ func (s *EmailService) StartEmailPolling() {
 	}
 }
 
+// UpdateAllEmails updates emails for all users
 func (s *EmailService) UpdateAllEmails() error {
 	users, err := s.FetchAllUsers()
 	if err != nil {
@@ -70,6 +74,7 @@ func (s *EmailService) UpdateAllEmails() error {
 	return nil
 }
 
+// FetchAllUsers retrieves all users from the database
 func (s *EmailService) FetchAllUsers() ([]models.User, error) {
 	rows, err := s.psql.Query(context.Background(), "SELECT id, google_id, email FROM users")
 	if err != nil {
@@ -88,6 +93,7 @@ func (s *EmailService) FetchAllUsers() ([]models.User, error) {
 	return users, nil
 }
 
+// UpdateEmailsForUser updates emails for a specific user
 func (s *EmailService) UpdateEmailsForUser(userID int) error {
 	// Fetch the token from the database
 	token, err := s.authService.FetchGoogleTokenByUserID(userID)
@@ -138,6 +144,7 @@ func (s *EmailService) UpdateEmailsForUser(userID int) error {
 	return nil
 }
 
+// FetchUserEmailByID retrieves the user's email address by their ID
 func (s *EmailService) FetchUserEmailByID(userID int) (string, error) {
 	row := s.psql.QueryRow(context.Background(), "SELECT email FROM users WHERE id=$1", userID)
 	var email string
@@ -145,11 +152,12 @@ func (s *EmailService) FetchUserEmailByID(userID int) (string, error) {
 	return email, err
 }
 
+// FetchEmailsFromGmail retrieves emails from Gmail
 func (s *EmailService) FetchEmailsFromGmail(service *gmail.Service, userEmail string) ([]*gmail.Message, error) {
-	// Определяем время начала интервала
+	// Determine the start time for the interval
 	startTime := time.Now().Add(-s.interval - 1*time.Minute).Unix()
 
-	// Формируем запрос с фильтром "непрочитанные сообщения за последние interval+1 минут"
+	// Form the query to fetch unread messages in the last interval+1 minutes
 	query := fmt.Sprintf("is:unread after:%d", startTime)
 	call := service.Users.Messages.List(userEmail).Q(query)
 	res, err := call.Do()
@@ -164,7 +172,7 @@ func (s *EmailService) FetchEmailsFromGmail(service *gmail.Service, userEmail st
 			return nil, err
 		}
 		emails = append(emails, msg)
-		// Изменение статуса на "прочитанное"
+		// Mark the message as read
 		modifyCall := service.Users.Messages.Modify(userEmail, m.Id, &gmail.ModifyMessageRequest{
 			RemoveLabelIds: []string{"UNREAD"},
 		})
@@ -176,6 +184,7 @@ func (s *EmailService) FetchEmailsFromGmail(service *gmail.Service, userEmail st
 	return emails, nil
 }
 
+// SaveEmailsToDB saves emails to the database
 func (s *EmailService) SaveEmailsToDB(token *oauth2.Token, userID int, messages []*gmail.Message) error {
 	tx, err := s.psql.Begin(context.Background())
 	if err != nil {
@@ -226,6 +235,7 @@ func (s *EmailService) SaveEmailsToDB(token *oauth2.Token, userID int, messages 
 	return tx.Commit(context.Background())
 }
 
+// fetchAttachment retrieves the attachment data
 func (s *EmailService) fetchAttachment(token *oauth2.Token, messageID, attachmentID string) (string, error) {
 	client := s.authService.OAuthConfig().Client(context.Background(), token)
 	gmailService, err := gmail.NewService(context.Background(), option.WithHTTPClient(client))
@@ -248,6 +258,8 @@ func (s *EmailService) fetchAttachment(token *oauth2.Token, messageID, attachmen
 
 	return base64.StdEncoding.EncodeToString(data), nil
 }
+
+// extractBody extracts the body of the email
 func (s *EmailService) extractBody(parts []*gmail.MessagePart) string {
 	for _, part := range parts {
 		if len(part.Parts) > 0 {
@@ -264,6 +276,7 @@ func (s *EmailService) extractBody(parts []*gmail.MessagePart) string {
 	return ""
 }
 
+// extractHeader extracts the header of the email
 func (s *EmailService) extractHeader(headers []*gmail.MessagePartHeader, name string) string {
 	for _, header := range headers {
 		if header.Name == name {
@@ -273,6 +286,7 @@ func (s *EmailService) extractHeader(headers []*gmail.MessagePartHeader, name st
 	return ""
 }
 
+// extractSendedAt extracts the SendedAt information of the email
 func (s *EmailService) extractSendedAt(headers []*gmail.MessagePartHeader) time.Time {
 	for _, header := range headers {
 		if header.Name == "Date" {
@@ -285,6 +299,7 @@ func (s *EmailService) extractSendedAt(headers []*gmail.MessagePartHeader) time.
 	return time.Now()
 }
 
+// GetEmailsByUserID retrieves emails by user ID from the database
 func (s *EmailService) GetEmailsByUserID(userID int) ([]models.Email, error) {
 	rows, err := s.psql.Query(context.Background(), "SELECT id, email_id, subject, body, sender FROM emails WHERE user_id=$1", userID)
 	if err != nil {
@@ -304,6 +319,7 @@ func (s *EmailService) GetEmailsByUserID(userID int) ([]models.Email, error) {
 	return emails, nil
 }
 
+// GetAllEmails retrieves all emails from the database
 func (s *EmailService) GetAllEmails() ([]models.Email, error) {
 	rows, err := s.psql.Query(context.Background(), "SELECT id, email_id, subject, body, sender FROM emails")
 	if err != nil {
@@ -323,6 +339,7 @@ func (s *EmailService) GetAllEmails() ([]models.Email, error) {
 	return emails, nil
 }
 
+// GetUserIDByEmail retrieves the user ID by email address from the database
 func (s *EmailService) GetUserIDByEmail(email string) (int, error) {
 	row := s.psql.QueryRow(context.Background(), "SELECT id FROM users WHERE email=$1", email)
 	var userID int
@@ -330,6 +347,7 @@ func (s *EmailService) GetUserIDByEmail(email string) (int, error) {
 	return userID, err
 }
 
+// DeleteEmailByID deletes an email by its ID from the database
 func (s *EmailService) DeleteEmailByID(emailID string) error {
 	tx, err := s.psql.Begin(context.Background())
 	if err != nil {
@@ -350,6 +368,7 @@ func (s *EmailService) DeleteEmailByID(emailID string) error {
 	return tx.Commit(context.Background())
 }
 
+// DeleteAllEmailsByUserID deletes all emails by user ID from the database
 func (s *EmailService) DeleteAllEmailsByUserID(userID int) error {
 	tx, err := s.psql.Begin(context.Background())
 	if err != nil {

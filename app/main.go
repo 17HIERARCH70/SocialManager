@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "github.com/17HIERARCH70/SocialManager/docs"
 	"github.com/17HIERARCH70/SocialManager/internal/api"
 	"github.com/17HIERARCH70/SocialManager/internal/config"
 	"github.com/17HIERARCH70/SocialManager/internal/logger"
@@ -8,6 +9,12 @@ import (
 	_ "net/http/pprof"
 	"os"
 )
+
+// @title SocialManager API
+// @version 1.0
+// @description API for managing social accounts and emails.
+// @host localhost:8080
+// @BasePath /api
 
 func main() {
 	// Initialize the config
@@ -27,5 +34,6 @@ func main() {
 	// Initialize the application
 	app := api.NewApp(psqlPool, cfg, log)
 
+	// Run the application
 	app.Run()
 }

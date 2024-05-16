@@ -1,14 +1,18 @@
 package api
 
 import (
+	_ "github.com/17HIERARCH70/SocialManager/docs"
 	"github.com/17HIERARCH70/SocialManager/internal/api/middleware"
 	"github.com/17HIERARCH70/SocialManager/internal/handlers/authHandlers"
 	"github.com/17HIERARCH70/SocialManager/internal/handlers/emailHandlers"
 	authService2 "github.com/17HIERARCH70/SocialManager/internal/services/authService"
 	emailService2 "github.com/17HIERARCH70/SocialManager/internal/services/emailService"
 	"github.com/gorilla/mux"
+	httpSwagger "github.com/swaggo/http-swagger"
+	_ "github.com/swaggo/swag"
 )
 
+// SetupRoutes sets up the application's routes
 func (a *App) SetupRoutes() {
 	router := mux.NewRouter()
 
@@ -17,6 +21,9 @@ func (a *App) SetupRoutes() {
 
 	emailService, _ := emailService2.NewEmailService(a.psql, a.cfg, authService, a.log)
 	emailHandler := emailHandlers.NewEmailHandler(emailService, a.log)
+
+	// Swagger route
+	router.PathPrefix("/api/swagger/").Handler(httpSwagger.WrapHandler)
 
 	// Authentication routes
 	authRouter := router.PathPrefix("/api/auth").Subrouter()

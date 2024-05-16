@@ -1,0 +1,179 @@
+basePath: /api
+definitions:
+  models.Attachment:
+    properties:
+      body:
+        type: string
+      email_id:
+        type: integer
+      file:
+        type: string
+      filename:
+        type: string
+      id:
+        type: integer
+      mime_type:
+        type: string
+    type: object
+  models.Email:
+    properties:
+      attachment:
+        items:
+          $ref: '#/definitions/models.Attachment'
+        type: array
+      body:
+        type: string
+      created_at:
+        type: string
+      email_id:
+        type: string
+      id:
+        type: integer
+      sender:
+        type: string
+      subject:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: API for managing social accounts and emails.
+  title: SocialManager API
+  version: "1.0"
+paths:
+  /auth/google_callback:
+    get:
+      description: Handle Google OAuth callback
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: JWT Tokens
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Google OAuth Callback
+      tags:
+      - auth
+  /auth/google_login:
+    get:
+      description: Initiate Google OAuth login
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: URL for Google login
+          schema:
+            type: string
+      summary: Google Login
+      tags:
+      - auth
+  /emails:
+    get:
+      description: Retrieve all emails
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Email'
+            type: array
+      summary: Get All Emails
+      tags:
+      - emails
+  /emails/{email_id}:
+    delete:
+      description: Delete an email by its ID
+      parameters:
+      - description: Email ID
+        in: path
+        name: email_id
+        required: true
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Email deleted successfully
+          schema:
+            type: string
+      summary: Delete Email by ID
+      tags:
+      - emails
+  /emails/update:
+    put:
+      description: Update all emails
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Emails updated successfully
+          schema:
+            type: string
+      summary: Update Emails
+      tags:
+      - emails
+  /emails/user:
+    get:
+      description: Retrieve user ID by email
+      parameters:
+      - description: Email
+        in: query
+        name: email
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: user_id
+          schema:
+            additionalProperties:
+              type: integer
+            type: object
+      summary: Get User ID by Email
+      tags:
+      - emails
+  /emails/user/{user_id}:
+    delete:
+      description: Delete all emails by user ID
+      parameters:
+      - description: User ID
+        in: path
+        name: user_id
+        required: true
+        type: integer
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: All emails deleted successfully
+          schema:
+            type: string
+      summary: Delete All Emails by User ID
+      tags:
+      - emails
+    get:
+      description: Retrieve emails by user ID
+      parameters:
+      - description: User ID
+        in: path
+        name: user_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Email'
+            type: array
+      summary: Get Emails by User ID
+      tags:
+      - emails
+swagger: "2.0"
