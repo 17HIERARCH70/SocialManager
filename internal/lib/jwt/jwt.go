@@ -1,29 +1,64 @@
 package jwt
 
 import (
-	"errors"
-	"github.com/17HIERARCH70/SocialManager/internal/domain/models"
+	"fmt"
 	"github.com/golang-jwt/jwt/v5"
 	"os"
 	"time"
 )
 
-// NewToken creates new JWT token for given user.
-func NewToken(user models.User, duration time.Duration) (string, error) {
-	token := jwt.New(jwt.SigningMethodHS256)
-	JWTSecretKey := os.Getenv("JWT_SECRET_KEY")
-	if JWTSecretKey == "" {
-		return "", errors.New("JWT secret key is not set")
-	}
-	claims := token.Claims.(jwt.MapClaims)
-	claims["uid"] = user.ID
-	claims["email"] = user.Email
-	claims["exp"] = time.Now().Add(duration).Unix()
+const (
+	accessTokenDuration  = time.Minute * 15
+	refreshTokenDuration = time.Hour * 128
+)
 
-	tokenString, err := token.SignedString([]byte(JWTSecretKey))
+type AuthDetails struct {
+	AuthUuid string
+	UserId   uint64
+}
+
+func CreateAccessToken(authD AuthDetails) (string, error) {
+	claims := jwt.MapClaims{
+		"authorized": true,
+		"auth_uuid":  authD.AuthUuid,
+		"user_id":    authD.UserId,
+		"exp":        time.Now().Add(accessTokenDuration).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(os.Getenv("API_SECRET")))
+}
+
+func CreateRefreshToken(authD AuthDetails) (string, error) {
+	claims := jwt.MapClaims{
+		"auth_uuid": authD.AuthUuid,
+		"exp":       time.Now().Add(refreshTokenDuration).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(os.Getenv("API_SECRET")))
+}
+
+func CreateTokenPair(authD AuthDetails) (map[string]string, error) {
+	accessToken, err := CreateAccessToken(authD)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return tokenString, nil
+	refreshToken, err := CreateRefreshToken(authD)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]string{
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+	}, nil
+}
+
+func VerifyAccessToken(tokenString string) (*jwt.Token, error) {
+	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unsupported signing method: %v", token.Header["alg"])
+		}
+		return []byte(os.Getenv("API_SECRET")), nil
+	})
 }

@@ -2,61 +2,91 @@ package authHandlers
 
 import (
 	"encoding/json"
-	"github.com/17HIERARCH70/SocialManager/internal/domain/models"
-	"github.com/17HIERARCH70/SocialManager/internal/lib/jwt"
-	"github.com/17HIERARCH70/SocialManager/internal/services"
-	"golang.org/x/exp/slog"
 	"net/http"
 	"time"
+
+	"github.com/17HIERARCH70/SocialManager/internal/lib/jwt"
+	"github.com/17HIERARCH70/SocialManager/internal/services/authService"
+	"golang.org/x/oauth2"
 )
 
 type AuthHandler struct {
-	UserService services.UserServiceMethods
-	Log         *slog.Logger
+	authService *authService.AuthService
 }
 
-func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var creds models.Credentials // Assume this struct exists in your domain/models package
-	err := json.NewDecoder(r.Body).Decode(&creds)
-	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+func NewAuthHandler(authService *authService.AuthService) *AuthHandler {
+	return &AuthHandler{authService: authService}
+}
+
+func (h *AuthHandler) GoogleLoginHandler(w http.ResponseWriter, r *http.Request) {
+	url := h.authService.OAuthConfig().AuthCodeURL("state-token", oauth2.AccessTypeOffline, oauth2.ApprovalForce)
+	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+}
+
+func (h *AuthHandler) GoogleCallbackHandler(w http.ResponseWriter, r *http.Request) {
+	state := r.URL.Query().Get("state")
+	if state != "state-token" {
+		http.Error(w, "State parameter doesn't match", http.StatusBadRequest)
 		return
 	}
 
-	user, err := h.UserService.AuthenticateUser(creds.Email, creds.Password)
+	code := r.URL.Query().Get("code")
+	token, err := h.authService.ExchangeToken(code)
 	if err != nil {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		h.authService.Log.Error("Failed to exchange token", "error", err)
+		http.Error(w, "Failed to exchange token", http.StatusInternalServerError)
 		return
 	}
 
-	token, err := jwt.NewToken(*user, time.Hour*24)
+	userInfo, err := h.authService.FetchUserInfo(token)
 	if err != nil {
-		h.Log.Error("Failed to generate token", "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		h.authService.Log.Error("Failed to fetch user info", "error", err)
+		http.Error(w, "Failed to fetch user info", http.StatusInternalServerError)
+		return
+	}
+
+	userID, err := h.authService.SaveUserToDB(userInfo)
+	if err != nil {
+		h.authService.Log.Error("Failed to save user to DB", "error", err)
+		http.Error(w, "Failed to save user to DB", http.StatusInternalServerError)
+		return
+	}
+
+	err = h.authService.SaveGoogleTokensToDB(userID, token)
+	if err != nil {
+		h.authService.Log.Error("Failed to save Google tokens to DB", "error", err)
+		http.Error(w, "Failed to save Google tokens to DB", http.StatusInternalServerError)
+		return
+	}
+
+	authDetails := jwt.AuthDetails{
+		AuthUuid: userInfo["sub"].(string),
+		UserId:   uint64(userID),
+	}
+
+	jwtTokens, err := jwt.CreateTokenPair(authDetails)
+	if err != nil {
+		h.authService.Log.Error("Failed to create JWT tokens", "error", err)
+		http.Error(w, "Failed to create JWT tokens", http.StatusInternalServerError)
+		return
+	}
+
+	accessToken := jwtTokens["access_token"]
+	refreshToken := jwtTokens["refresh_token"]
+	expiresAt := time.Now().Add(15 * time.Minute)
+
+	err = h.authService.SaveTokensToDB(userID, accessToken, refreshToken, expiresAt)
+	if err != nil {
+		h.authService.Log.Error("Failed to save JWT tokens to DB", "error", err)
+		http.Error(w, "Failed to save JWT tokens to DB", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"token": token,
-	})
-}
-
-func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
-	var newUser models.User
-	err := json.NewDecoder(r.Body).Decode(&newUser)
+	err = json.NewEncoder(w).Encode(jwtTokens)
 	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		h.authService.Log.Error("Failed to encode response", "error", err)
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
-	var id int
-	id, err = h.UserService.CreateUser(&newUser)
-	if err != nil {
-		h.Log.Error("Failed to create user", "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-	h.Log.Info("User created", "ID", id, "user", newUser.Email)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
 }

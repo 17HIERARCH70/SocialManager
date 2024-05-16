@@ -12,22 +12,34 @@ type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Postgres PostgresConfig `yaml:"postgres"`
 	Gmail    GmailConfig    `yaml:"gmail"`
+	Secrets  SecretsConfig  `yaml:"secrets"`
+	OAuth2   OAuth2Config   `yaml:"oauth2"`
 }
+
 type ServerConfig struct {
-	Host string `env-default:"localhost"`
-	Port int    `env-default:"8080"`
+	Host string `yaml:"host" env-default:"localhost"`
+	Port int    `yaml:"port" env-default:"8080"`
 }
+
 type PostgresConfig struct {
-	Host     string `env-default:"localhost"`
-	Port     int    `env-default:"5432"`
-	User     string `env-default:"postgres"`
-	Password string
-	Database string `env-default:"SocialManagerDB"`
-	SSLMode  string `env-default:"disable"`
+	Host     string `yaml:"host" env-default:"localhost"`
+	Port     int    `yaml:"port" env-default:"5432"`
+	User     string `yaml:"user" env-default:"postgres"`
+	Password string `yaml:"password,omitempty"`
+	Database string `yaml:"database" env-default:"SocialManagerDB"`
+	SSLMode  string `yaml:"SSLMode" env-default:"disable"`
 }
 
 type GmailConfig struct {
-	SecretPath string `env-default:"secret.json"`
+	RefreshTime string `yaml:"refreshTime" env-default:"5m"`
+}
+
+type OAuth2Config struct {
+	CredentialPath string `yaml:"credentialPath" env-default:"config/secretGmail.json"`
+}
+
+type SecretsConfig struct {
+	JWTSecret string `yaml:"jwtSecret" env-default:"SECRET_KEY"`
 }
 
 func MustLoad() *Config {
@@ -43,7 +55,7 @@ func MustLoad() *Config {
 	var cfg Config
 
 	if err := cleanenv.ReadConfig(configPath, &cfg); err != nil {
-		panic("config path if empty " + err.Error())
+		panic("config path is empty " + err.Error())
 	}
 
 	return &cfg

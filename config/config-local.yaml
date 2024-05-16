@@ -11,7 +11,21 @@ postgres:
   user: "socialmanage"
   password: "secretpass"
   database: "socialmanagerdb"
-  sslmode: disable
+  SSLmode: disable
+
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+  database: 0
 
 gmail:
-  secretpath: "/Users/nikitabelekov/go/src/SocialManager/secret.json"
+  secretPath: "/Users/nikitabelekov/go/src/SocialManager/config/secretGmail.json"
+  refreshTime: "30s"
+
+telegram:
+  secretPath: "/Users/nikitabelekov/go/src/SocialManager/secretTelegram.json"
+  refreshTime: "3m"
+
+secrets:
+  jwtSecret: "SECRETKEY"
